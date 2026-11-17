@@ -17,6 +17,8 @@ key ssh new                   # make a key labelled "default"; Touch ID
 key ssh new work              # make another key labelled "work"
 key ssh ls                    # labels, fingerprints and handle files, no auth
 key ssh rm work               # Touch ID, then delete the key
+key ssh add me@example.org    # move a host from its password to the default key
+key ssh password example.org  # log in with the password instead of the key
 ```
 
 Install: `make install` (into `~/.local/bin`, plus a `getkey` symlink). Run the tests with `make test`, which needs Xcode.
@@ -25,14 +27,22 @@ Install: `make install` (into `~/.local/bin`, plus a `getkey` symlink). Run the 
 
 The private key is made inside the Secure Enclave and cannot leave it. Each signature, and so each connection, needs Touch ID. `key ssh new` saves 2 files in `~/.ssh`: the public key, and a handle file named `id_ecdsa_sk_rk_LABEL` that tells OpenSSH which Secure Enclave key to ask for. Neither file is secret.
 
-This uses the tools macOS 26 and later ship: `sc_auth` makes and deletes the key, and OpenSSH reaches it through `/usr/lib/ssh-keychain.dylib`. To use a key with a host, add a block like this to `~/.ssh/config`:
+This uses the tools macOS 26 and later ship: `sc_auth` makes and deletes the key, and OpenSSH reaches it through `/usr/lib/ssh-keychain.dylib`.
 
-```
-Host example.org
-  IdentityFile ~/.ssh/id_ecdsa_sk_rk_default
-  IdentitiesOnly yes
-  SecurityKeyProvider /usr/lib/ssh-keychain.dylib
-```
+### Moving a host to the key
+
+`key ssh add [USER@]HOST [--port N] [--key LABEL]` does 4 things:
+
+1. Makes the `default` key if it does not exist yet. `--key` picks another existing key.
+2. Runs `ssh-copy-id`, which asks for the host's password one last time and adds the public key to the server's `~/.ssh/authorized_keys`.
+3. Writes a `Host` block to `~/.ssh/config.d/key-cli`. The first time, it backs up `~/.ssh/config` to `~/.ssh/config.key-cli-backup` and adds `Include config.d/key-cli` before the first `Host` or `Match` line, so the blocks apply to every host and win over a later `Host *`.
+4. Logs in with the key alone, after Touch ID. If that fails, it removes the `Host` block again. The key stays in the server's `authorized_keys`.
+
+It leaves alone any host whose user, port or key your own `~/.ssh/config` already sets, and lists those settings instead. The server needs OpenSSH 8.2 or later to accept these keys.
+
+### Logging in with the password
+
+`key ssh add` does not turn off password login on the server, so the password keeps working. `ssh HOST` tries the key first. `key ssh password HOST` runs ssh with key login turned off, so the host asks for its password. Arguments after the host go to ssh as they are. To stop a server accepting passwords, set `PasswordAuthentication no` in its `sshd_config`.
 
 Deleting a key cuts off every server that trusted it, and those servers keep a stale line in `authorized_keys`.
 

@@ -43,6 +43,27 @@ enum Subprocess {
             stderr: String(decoding: errData, as: UTF8.self))
     }
 
+    /// Runs a tool attached to this terminal, so it can ask for a password, and returns its exit status.
+    ///
+    /// Foundation's Process puts the child in a new process group, which the terminal treats
+    /// as a background job: ssh then cannot turn off echo or read the password, and stops.
+    /// posix_spawn keeps the child in this process group, in the foreground.
+    static func interactive(_ path: String, _ args: [String]) throws -> Int32 {
+        let argv = ([path] + args).map { strdup($0) } + [nil]
+        defer { argv.forEach { free($0) } }
+        var pid: pid_t = 0
+        let spawned = posix_spawn(&pid, path, nil, nil, argv, environ)
+        guard spawned == 0 else {
+            throw SubprocessError(description: "Could not start \(path): \(String(cString: strerror(spawned)))")
+        }
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) == -1 {
+            guard errno == EINTR else { throw SubprocessError(description: "Lost track of \(path).") }
+        }
+        // The exit code sits in bits 8 to 15 when the low 7 bits are 0; otherwise a signal ended it.
+        return status & 0x7f == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
+    }
+
     /// Like `run`, but throws with the tool's own error message if it exits non-zero.
     @discardableResult
     static func check(
