@@ -10,7 +10,31 @@ key rm OPENAI_API_KEY
 key adopt anthropic           # move a key stored by the old zsh function
 ```
 
-Install: `make install` (into `~/.local/bin`, plus a `getkey` symlink).
+It also makes SSH keys in the Mac's Secure Enclave, so each SSH connection needs Touch ID:
+
+```sh
+key ssh new                   # make a key labelled "default"; Touch ID
+key ssh new work              # make another key labelled "work"
+key ssh ls                    # labels, fingerprints and handle files, no auth
+key ssh rm work               # Touch ID, then delete the key
+```
+
+Install: `make install` (into `~/.local/bin`, plus a `getkey` symlink). Run the tests with `make test`, which needs Xcode.
+
+## SSH keys
+
+The private key is made inside the Secure Enclave and cannot leave it. Each signature, and so each connection, needs Touch ID. `key ssh new` saves 2 files in `~/.ssh`: the public key, and a handle file named `id_ecdsa_sk_rk_LABEL` that tells OpenSSH which Secure Enclave key to ask for. Neither file is secret.
+
+This uses the tools macOS 26 and later ship: `sc_auth` makes and deletes the key, and OpenSSH reaches it through `/usr/lib/ssh-keychain.dylib`. To use a key with a host, add a block like this to `~/.ssh/config`:
+
+```
+Host example.org
+  IdentityFile ~/.ssh/id_ecdsa_sk_rk_default
+  IdentitiesOnly yes
+  SecurityKeyProvider /usr/lib/ssh-keychain.dylib
+```
+
+Deleting a key cuts off every server that trusted it, and those servers keep a stale line in `authorized_keys`.
 
 ## Why another tool can't bypass it
 

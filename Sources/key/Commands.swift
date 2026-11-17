@@ -12,6 +12,7 @@ let usage = """
       key ls                list stored key names
       key adopt NAME...     move keys stored by the old zsh function under Touch ID
       key NAME              same as `key set NAME`
+      key ssh ...           SSH keys in the Secure Enclave (see `key ssh help`)
     """
 
 struct Commands {
@@ -27,6 +28,7 @@ struct Commands {
         case "rm": try remove(one(rest))
         case "ls": try list()
         case "adopt": try adopt(rest)
+        case "ssh": try SSHCommands().run(rest)
         case "-h", "--help", "help": print(usage)
         case _ where rest.isEmpty && !command.hasPrefix("-"): try set(command)
         default: throw UsageError(description: usage)
