@@ -1,10 +1,14 @@
 PREFIX ?= $(HOME)/.local
 BIN := $(PREFIX)/bin
 
-.PHONY: build install uninstall
+.PHONY: build test install uninstall
 
 build:
 	swift build -c release
+
+# XCTest ships with Xcode, not with the Command Line Tools.
+test:
+	swift test
 
 # Each rebuild changes the binary's hash, so the keychain asks once per key
 # ("key wants to use…") after an upgrade: enter the login password, Always Allow.
